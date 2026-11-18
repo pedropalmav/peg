@@ -105,6 +105,24 @@ def make_env(config,  use_goal_idx=False, log_per_goal=False, eval=False):
         return self._env.step(new_action)
     env = GaussianActions(env, std=0)
 
+  elif config.task == 'cookie_goalgrid':
+    # cookie-env GoalGrid (config.cookie_env.id). Runs in a separate py3.11
+    # process; see examples/cookie_grid.py.
+    from cookie_grid import GoalGridEnv
+    env_kwargs = {'agent_start_pos': None} if config.cookie_env.random_start else {}
+    env = GoalGridEnv(config.cookie_env.id, max_steps=config.time_limit,
+                      seed=config.seed + (10000 if eval else 0), **env_kwargs)
+    info_to_obs = None
+    if eval:
+      def info_to_obs(info, obs):
+        if info is None:
+          info = env.get_metrics_dict()
+        obs = obs.copy()
+        for k, v in info.items():
+          if 'metric' in k:
+            obs[k] = v
+        return obs
+    env = wrap_mega_env(env, info_to_obs)
   elif 'umazefull' == config.task:
     from envs.sibrivalry.ant_maze import AntMazeEnvFull
     env = AntMazeEnvFull(eval=eval)
@@ -367,6 +385,23 @@ def make_report_render_function(config):
       video = tf.concat([truth_imgs, model, error], 2)
       B, T, H, W, C = video.shape
       return video.transpose((1, 2, 0, 3, 4)).reshape((T, H, B * W, C))
+  elif config.task == 'cookie_goalgrid':
+    def video_from_state_fn(recon, openl, truth, env):
+      # Render model (x, y) predictions as grid frames; goal cell drawn at the
+      # true state so the agent marker is the only thing that differs.
+      def render(states, ref):
+        flat = states.numpy().reshape(-1, 2)
+        flat_ref = ref.numpy().reshape(-1, 2)
+        imgs = env.render_states(flat, flat_ref).astype(np.float32) / 255.0
+        return imgs.reshape([*states.shape[:2], *imgs.shape[-3:]])
+      truth_imgs = render(truth, truth)
+      recon_imgs = render(recon, truth[:, :recon.shape[1]])
+      openl_imgs = render(openl, truth[:, recon.shape[1]:])
+      model = tf.concat([recon_imgs[:, :5], openl_imgs], 1)
+      error = (model - truth_imgs + 1) / 2
+      video = tf.concat([truth_imgs, model, error], 2)
+      B, T, H, W, C = video.shape
+      return video.numpy().transpose((1, 2, 0, 3, 4)).reshape((T, H, B * W, C))
   elif 'umazefull' == config.task:
     return None
   elif config.task in {'umazefulldownscale', 'hardumazefulldownscale'}:
@@ -666,6 +701,30 @@ def make_eval_fn(config):
       logger.scalar('max_eval_metric_success/goal_all', all_metric_success)
       all_metric_success_cell = np.mean(all_metric_success_cell)
       logger.scalar('max_eval_metric_success_cell/goal_all', all_metric_success_cell)
+      logger.write()
+  elif config.task == 'cookie_goalgrid':
+    # Each eval episode uses the env's own goal cell (random for
+    # GoalGrid-random-v0) and start, so eval_eps episodes give a success rate. The eval env is seeded separately,
+    # so every method sees the same sequence of (start, goal) pairs per seed.
+    num_video_eps = 4
+    def evaluate_all_goals(driver, eval_policy, logger):
+      env = driver._envs[0]
+      success_any, success_final, videos = [], [], []
+      for ep_idx in range(config.eval_eps):
+        driver(eval_policy, episodes=1)
+        ep = driver._eps[0]
+        ep = {k: driver._convert([t[k] for t in ep]) for k in ep[0]}
+        success_any.append(np.max(ep['metric_success']))
+        success_final.append(ep['metric_success'][-1])
+        if ep_idx < num_video_eps:
+          frames = env.render_states(ep['observation'], ep['goal'], ep.get('log_agent_dir'))
+          T = frames.shape[0]
+          frames = np.pad(frames, ((0, (config.time_limit + 1) - T), (0, 0), (0, 0), (0, 0)), 'constant')
+          videos.append(frames)
+      # reached the goal cell at any step / is on it at the last step.
+      logger.scalar('max_eval_metric_success/goal_all', np.mean(success_any))
+      logger.scalar('final_eval_metric_success/goal_all', np.mean(success_final))
+      logger.video('eval_gc_policy', np.stack(videos, 0))
       logger.write()
   elif config.task in {'umazefull','umazefulldownscale', 'hardumazefulldownscale'}:
     def episode_render_fn(env, ep):
@@ -1152,6 +1211,9 @@ def make_ep_render_fn(config):
       env.clear_plots()
       all_img = np.stack(all_img, 0) # T x H x W x C
       return all_img
+  elif config.task == 'cookie_goalgrid':
+    def episode_render_fn(env, ep):
+      return env.render_states(ep['observation'], ep['goal'], ep.get('log_agent_dir'))
   elif config.task in {'umazefull','umazefulldownscale', 'hardumazefulldownscale'}:
     def episode_render_fn(env, ep):
       inner_env = env._env._env._env
@@ -2491,7 +2553,8 @@ def main():
   if logdir.exists():
     print('Loading existing config')
     yaml_config = yaml.safe_load((logdir / 'config.yaml').read_text())
-    new_keys = []
+    # keys added after a logdir was created get their current default.
+    new_keys = ['cookie_env']
     for key in new_keys:
       if key not in yaml_config:
         print(f"{key} does not exist in saved config file, using default value from default config file")

@@ -24,6 +24,11 @@ defaults:
   replay: {capacity: 2e6, ongoing: False, minlen: 50, maxlen: 50, prioritize_ends: True, sample_recent: False, recent_episode_threshold: 0, initial_buffer_path: '', initial_buffer_capacity: 1e6, shuffle_blocks: False}
   dataset: {batch: 16, length: 50}
   goal_dataset: {batch: 150, length: 50}
+  # cookie-env GoalGrid settings (task cookie_goalgrid). id: GoalGrid-random-v0 (goal
+  # cell resampled each episode) or GoalGrid-v0 (goal fixed at (8, 1)).
+  # random_start: random agent start cell + direction each episode, else the
+  # env's registered start.
+  cookie_env: {id: 'GoalGrid-random-v0', random_start: True}
   log_keys_video: ['image']
   log_keys_sum: '^$'
   log_keys_mean: '^$'
@@ -239,6 +244,58 @@ peg_point_maze:
   train_every: 5
   task: pointmaze
   two_policy_rollout_every: 1 # run 2 policy rollout every X algo updates
+
+peg_goal_grid:
+  # cookie-env GoalGrid (10x10 room, 8x8 interior, 7 discrete actions); which
+  # variant and start mode are set by cookie_env in defaults. Same hyperparameters
+  # as peg_point_maze except for the env-specific ones. Obs = goal = agent (x, y).
+  action_repeat: 1
+  actor_opt.lr: 8e-5
+  actor_grad: 'auto'
+  actor_ent: 1e-4
+  clip_rewards: identity
+  critic_opt.lr: 8e-5
+  dataset: {batch: 45, length: 50}
+  dd_neg_sampling_factor : 0.0
+  decoder: {mlp_keys: 'observation', cnn_keys: '$^', mlp_layers: [400,400,400]}
+  disag_models: 10
+  disag_log: False
+  encoder: {mlp_keys: 'observation', cnn_keys: '$^', mlp_layers: [400,400,400]}
+  eval_every: 200 # 200 episodes = 1e4 steps.
+  eval_eps: 20 # random (start, goal) pairs per evaluation
+  expl_behavior: 'Plan2Explore'
+  expl_extr_scale: 0.0
+  exp_rollout_every: 0
+  gc_reward: 'dynamical_distance'
+  grad_heads: [decoder]
+  goal_policy_rollout_percentage: 0.5
+  goal_update_every: 50
+  goal_strategy: 'SubgoalPlanner'
+  goal_key: 'goal'
+  go_expl_rand_ac: False
+  gcp_rollout_every: 0
+  kl.free: 1.0
+  log_keys_mean: 'metric_'
+  log_keys_sum: 'metric_|subgoal_dist'
+  log_keys_max: 'metric_|subgoal_success'
+  model_opt.lr: 3e-4
+  prefill: 50
+  precision: 16
+  pretrain: 100
+  pred_discount: False
+  pred_reward: False
+  pred_embed: True
+  planner: {planner_type: shooting_cem, horizon: 25, batch: 500, cem_elite_ratio: 0.2, optimization_steps: 5, std_scale: 4.0, init_candidates: [4.5, 4.5], goal_min: [1.0, 1.0], goal_max: [8.0, 8.0], cost_use_p2e_value: True, final_step_cost: False }
+  replay.prioritize_ends: False
+  replay.sample_recent: True
+  rssm: {ensemble: 1, hidden: 200, deter: 200, stoch: 50, discrete: 0, act: elu, norm: none, std_act: sigmoid2, min_std: 0.1}
+  subgoal_threshold: 5.0
+  state_key: 'observation'
+  steps: 300000
+  time_limit: 50
+  train_every: 5
+  task: cookie_goalgrid
+  two_policy_rollout_every: 1
 
 peg_ant_maze:
   action_repeat: 1

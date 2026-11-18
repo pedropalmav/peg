@@ -1,0 +1,19 @@
+# Python >= 3.11 side of the cookie-env bridge. cookie-env can't be imported by
+# PEG directly (PEG is pinned to Python 3.8 by TF 2.4), so server.py runs the
+# env in this venv and examples/cookie_grid.py talks to it over a pipe.
+#   uv sync --project bridges/cookie_env
+[project]
+name = "peg-cookie-env-bridge"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["cookie-env"]
+
+[tool.uv]
+package = false
+# minigrid >= 3.1 depends on pygame-ce while cookie-env depends on pygame; both
+# install the same `pygame` module and clobber each other depending on install
+# order. Keep the one cookie-env declares and drop pygame-ce.
+override-dependencies = ["pygame-ce; sys_platform == 'never'"]
+
+[tool.uv.sources]
+cookie-env = { git = "https://github.com/pedropalmav/cookie-env", branch = "main" }

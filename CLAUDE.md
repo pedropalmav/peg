@@ -14,6 +14,7 @@ Official implementation of PEG (Planning Exploratory Goals, ICLR 2023): an unsup
 - Environments live in **external repos** that must be on `PYTHONPATH` (only one at a time):
   - Point Maze, Ant Maze, 3-block Stack → `mrl` (github.com/hueds/mrl)
   - Walker → `lexa-benchmark` (+ `dm_control` installed with `pip install .`, no `-e`)
+  - GoalGrid (cookie-env, github.com/pedropalmav/cookie-env) → no PYTHONPATH needed. cookie-env needs Python ≥ 3.11, so it lives in its own uv sub-project `bridges/cookie_env` (`uv sync --project bridges/cookie_env`; pinned commit in its `uv.lock`, `pygame-ce` overridden away because it clobbers `pygame`). `bridges/cookie_env/server.py` runs the env and `examples/cookie_grid.py` (`GoalGridEnv`) drives it over a JSON-lines pipe. Task `cookie_goalgrid`, config `peg_goal_grid`; `cookie_env.id` (`GoalGrid-random-v0` | `GoalGrid-v0`) and `cookie_env.random_start` pick the variant. When `time_limit` < 50, also set `replay.minlen`, `replay.maxlen` and `dataset.length` to it (the run script does this), or replay drops the shorter episodes; longer episodes are fine with the 50-step chunks. Obs = goal = agent (x, y) cell (direction is not observed), eval = `eval_eps` episodes with the env's random goal/start, logged as `max_eval_metric_success/goal_all` (reached at any step) and `final_eval_metric_success/goal_all`. `scripts/run_goal_grid.sh` runs PEG + MEGA/Skewfit/LEXA/P2E (`--help` for options).
 - Ant Maze, Walker and Stack need MuJoCo 2.0. Rendering often needs `MUJOCO_GL=egl MUJOCO_RENDERER=egl` and `LD_PRELOAD` set to libGLEW/libGL (or `unset LD_PRELOAD` if GLEW errors).
 - `main()` asserts that a GPU is present; there is no CPU path without removing that assert.
 
@@ -23,18 +24,18 @@ There are no tests or linters. The single entry point is `examples/run_goal_cond
 
 ```bash
 # Quick smoke test (~2-3 min, Point Maze, needs mrl on PYTHONPATH)
-scripts/run.sh python examples/run_goal_cond.py --configs peg_point_maze test_maze --jit True --logdir ~/logdir/test_peg_maze
+scripts/run.sh python examples/run_goal_cond.py --configs peg_point_maze test_maze --jit True --logdir logdir/test_peg_maze
 # Walker smoke test (needs lexa-benchmark on PYTHONPATH)
-scripts/run.sh python examples/run_goal_cond.py --configs peg_walker test_walker --jit True --logdir ~/logdir/test_peg_walker
+scripts/run.sh python examples/run_goal_cond.py --configs peg_walker test_walker --jit True --logdir logdir/test_peg_walker
 
 # Full runs: peg_point_maze | peg_ant_maze | peg_walker | peg_three_stack
-scripts/run.sh python examples/run_goal_cond.py --configs peg_ant_maze --logdir ~/logdir/peg_ant_maze
+scripts/run.sh python examples/run_goal_cond.py --configs peg_ant_maze --logdir logdir/peg_ant_maze
 # Baselines via overrides
 --goal_strategy MEGA | --goal_strategy Skewfit
 --goal_strategy SampleReplay --two_policy_rollout_every 0 --gcp_rollout_every 1 --exp_rollout_every 1   # LEXA
 --goal_strategy SampleReplay --two_policy_rollout_every 0 --gcp_rollout_every 0 --exp_rollout_every 1   # P2E
 
-scripts/run.sh tensorboard --logdir ~/logdir/<run>
+scripts/run.sh tensorboard --logdir logdir/<run>
 ```
 
 - `--jit False` runs TF eagerly (no `@tf.function` graphs) so `ipdb` breakpoints work inside model code. The `debug` config shortens timing to reach breakpoints fast.

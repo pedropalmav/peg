@@ -13,3 +13,6 @@ logs/
 pegs2_data
 3stack_states_images
 imgs
+
+# experiment outputs (scripts/run_goal_grid.sh default, CLAUDE.md commands)
+/logdir/
