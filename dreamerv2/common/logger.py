@@ -194,7 +194,7 @@ def encode_gif(frames, fps):
   cmd = ' '.join([
       'ffmpeg -y -f rawvideo -vcodec rawvideo',
       f'-r {fps:.02f} -s {w}x{h} -pix_fmt {pxfmt} -i - -filter_complex',
-      '[0:v]split[x][z];[z]palettegen[y];[x]fifo[x];[x][y]paletteuse',
+      '[0:v]split[x][z];[z]palettegen[y];[x][y]paletteuse',
       f'-r {fps:.02f} -f gif -'])
   proc = Popen(cmd.split(' '), stdin=PIPE, stdout=PIPE, stderr=PIPE)
   for image in frames:

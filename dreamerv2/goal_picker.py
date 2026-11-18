@@ -778,7 +778,7 @@ class SubgoalPlannerKDE:
 
 
 class Skewfit(MEGA):
-  def __init__(self, agent, replay, act_space, state_key, ep_length, obs2goal_fn, goal_sample_fn):
+  def __init__(self, agent, replay, act_space, state_key, ep_length, obs2goal_fn, goal_sample_fn=None):
     super().__init__(agent, replay, act_space, state_key, ep_length, obs2goal_fn, goal_sample_fn)
     self.random = True
 

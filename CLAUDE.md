@@ -8,7 +8,9 @@ Official implementation of PEG (Planning Exploratory Goals, ICLR 2023): an unsup
 
 ## Environment / setup
 
-- Python 3.6 + TensorFlow 2.4 (GPU). Pinned conda env: `conda env create -f environment.yml && conda activate peg`, then `pip install -e .` (the package installs as `dreamerv2`).
+- Python 3.8 + TensorFlow 2.4.4 (GPU) managed with **uv**: `uv sync --extra gpu` (deps in `pyproject.toml`; the `gpu` extra pip-installs CUDA 11 / cuDNN 8 libs). The original conda `environment.yml` (Python 3.6) is kept for reference only.
+- **Run everything through `scripts/run.sh <cmd>`** (works from fish too): it sets `LD_LIBRARY_PATH` to the pip CUDA libs (plus a `libcusolver.so.10 -> .so.11` shim TF 2.4 needs), `GLIBC_TUNABLES` so torch 1.10 loads on glibc ≥ 2.41, `MPLBACKEND=Agg`, and `PYTHONPATH` to `../mrl` (override with `MRL_PATH` or `LEXA_PATH`).
+- gym 0.18.0 comes from `third_party/wheels/` (built from the official sdist with only its invalid `opencv-python>=3.` specifier fixed, which uv otherwise rejects).
 - Environments live in **external repos** that must be on `PYTHONPATH` (only one at a time):
   - Point Maze, Ant Maze, 3-block Stack → `mrl` (github.com/hueds/mrl)
   - Walker → `lexa-benchmark` (+ `dm_control` installed with `pip install .`, no `-e`)
@@ -21,18 +23,18 @@ There are no tests or linters. The single entry point is `examples/run_goal_cond
 
 ```bash
 # Quick smoke test (~2-3 min, Point Maze, needs mrl on PYTHONPATH)
-python examples/run_goal_cond.py --configs peg_point_maze test_maze --jit True --logdir ~/logdir/test_peg_maze
+scripts/run.sh python examples/run_goal_cond.py --configs peg_point_maze test_maze --jit True --logdir ~/logdir/test_peg_maze
 # Walker smoke test (needs lexa-benchmark on PYTHONPATH)
-python examples/run_goal_cond.py --configs peg_walker test_walker --jit True --logdir ~/logdir/test_peg_walker
+scripts/run.sh python examples/run_goal_cond.py --configs peg_walker test_walker --jit True --logdir ~/logdir/test_peg_walker
 
 # Full runs: peg_point_maze | peg_ant_maze | peg_walker | peg_three_stack
-python examples/run_goal_cond.py --configs peg_ant_maze --logdir ~/logdir/peg_ant_maze
+scripts/run.sh python examples/run_goal_cond.py --configs peg_ant_maze --logdir ~/logdir/peg_ant_maze
 # Baselines via overrides
 --goal_strategy MEGA | --goal_strategy Skewfit
 --goal_strategy SampleReplay --two_policy_rollout_every 0 --gcp_rollout_every 1 --exp_rollout_every 1   # LEXA
 --goal_strategy SampleReplay --two_policy_rollout_every 0 --gcp_rollout_every 0 --exp_rollout_every 1   # P2E
 
-tensorboard --logdir ~/logdir/<run>
+scripts/run.sh tensorboard --logdir ~/logdir/<run>
 ```
 
 - `--jit False` runs TF eagerly (no `@tf.function` graphs) so `ipdb` breakpoints work inside model code. The `debug` config shortens timing to reach breakpoints fast.
